@@ -109,7 +109,7 @@ local function get_liquid_pos(pos, liquid)
 			connected[#connected+1] = minetest.get_position_from_hash(h)
 		end
 	end
--- choose the highest ones
+	-- choose the highest ones
 	local outposss = {}
 	for i = 1, #connected do
 		if not outposss[1] or outposss[1].y < connected[i].y then
