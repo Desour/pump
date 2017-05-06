@@ -69,9 +69,68 @@ local function is_liquid(pos)
 	return false
 end
 
+local function get_connected(startpos, nodes, connected, VoxelManip, minp, maxp, hashed_pos)
+	local node = VoxelManip:get_node_at(startpos)
+	connected[hashed_pos] = nodes[node.name] or false
+	if not nodes[node.name] then
+		return connected
+	end
+	local xyz = {"x", "y", "z"}
+	for p = 1, 3 do
+		for i = 1, -1, -2 do
+			local pos = vector.new(startpos)
+			pos[xyz[p]] = pos[xyz[p]] + i
+			hashed_pos = minetest.hash_node_position(pos)
+			if connected[hashed_pos] == nil and pos[xyz[p]] > minp[xyz[p]] and
+					pos[xyz[p]] < maxp[xyz[p]] then
+				connected = get_connected(pos, nodes, connected,
+						VoxelManip, minp, maxp, hashed_pos)
+			end
+			if p == 2 then
+				break
+			end
+		end
+	end
+	return connected
+end
+
 -- Returns the pos of the liquid source that should be pumped next.
 local function get_liquid_pos(pos, liquid)
-	return pos -- TODO
+	-- get all (to side or up) connected
+	local VoxelManip = minetest.get_voxel_manip()
+	local minp, maxp = VoxelManip:read_from_map(vector.add(pos, -50), vector.add(pos, 50))
+	local connected_o = get_connected(pos, {
+		[liquids[liquid].source] = "s",
+		[liquids[liquid].flowing] = "f",
+	}, {}, VoxelManip, minp, maxp, minetest.hash_node_position(pos))
+	local connected = {}
+	for h, t in pairs(connected_o) do
+		if t == "s" then
+			connected[#connected+1] = minetest.get_position_from_hash(h)
+		end
+	end
+-- choose the highest ones
+	local outposss = {}
+	for i = 1, #connected do
+		if not outposss[1] or outposss[1].y < connected[i].y then
+			outposss = {connected[i]}
+		elseif outposss[1].y == connected[i].y then
+			outposss[#outposss+1] = connected[i]
+		end
+	end
+	-- choose the ones that are most far away
+	local outposs = {}
+	local maxdist = 0
+	for i = 1, #outposss do
+		local dist = vector.distance(pos, outposss[i])
+		if dist >= maxdist then
+			maxdist = dist
+			outposs[#outposs+1] = outposss[i]
+		end
+	end
+	-- if it are more than one, choose by random
+	local outpos = outposs[math.random(#outposs)]
+	return outpos
 end
 
 local function step(pos)
