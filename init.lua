@@ -11,6 +11,8 @@ local load_time_start = os.clock()
 local modname = minetest.get_current_modname()
 
 
+local is_digilines = minetest.global_exists("digilines")
+
 -- Something to save meta information instead of getting is all time:
 local get_data, set_data, hard_data
 do
@@ -219,10 +221,47 @@ end
 
 local function make_formspec(data)
 	local dir_abs = math.abs(data.dir)
-	return "size[3,2]"..
-		"checkbox[1,1;activated;activated;"..data.activated.."]"..
+	local formspec = "size[4,2]"..
+		"checkbox[2,0;activated;activated;"..data.activated.."]"..
 		"dropdown[0,0;0.5;dira;x,y,z;"..dir_abs.."]"..
-		"dropdown[1,0;0.5;dirb;+,-;"..((data.dir/dir_abs > 0 and 1) or 2).."]"
+		"dropdown[1,0;0.5;dirb;+,-;"..((data.dir/dir_abs > 0 and 1) or 2).."]"..
+		"button[3,1.6;1,1;pump;Pump]"..
+		"button_exit[3,1;1,1;save;Save]"
+	if is_digilines then
+		formspec = formspec.."field[0,1.5;3,1;channel;Channel;${channel}]"
+	end
+	return formspec
+end
+
+local function on_digiline_receive(pos, node, channel, msg)
+	local data = get_data(pos)
+	if channel ~= data.channel then
+		return
+	end
+	local msgt = type(msg)
+	if msgt == "string" then
+		local smsg = msg
+		msg = {}
+		if smsg == "get" then
+			msg.command = "get"
+		elseif smsg == "pump" then
+			msg.command = "pump"
+		elseif smsg == "pimg" then
+			msg.command = "pimg"
+		end
+	elseif msgt ~= "table" then
+		return
+	end
+	if msg.command == "get" then
+		local msg = table.copy(data)
+		msg.formspec = nil
+		msg.channel = nil
+		digilines.receptor_send(pos, digilines.rules.default, channel, msg)
+	elseif msg.command == "pump" then
+		step(pos)
+	elseif msg.command == "ping" then
+		digilines.receptor_send(pos, digilines.rules.default, channel, "pong")
+	end
 end
 
 minetest.register_node("pump:pump", {
@@ -236,12 +275,12 @@ minetest.register_node("pump:pump", {
 			dir = -2,
 			pipe_length = 0,
 			activated = "false",
+			channel = "pump"..minetest.pos_to_string(pos),
 		}
 		data.formspec = make_formspec(data)
 		set_data(pos, data, true)
 	end,
 	on_receive_fields = function(pos, formanme, fields, sender)
-		print(dump(fields))
 		local data = get_data(pos)
 		if fields.activated then
 			data.activated = fields.activated
@@ -251,13 +290,16 @@ minetest.register_node("pump:pump", {
 			data.dir = data.dir/math.abs(data.dir) * xyz[fields.dira]
 		end
 		if fields.dirb then
-			data.dir = math.abs(data.dir) * (fields.dirb == "+" and 1) or -1
+			data.dir = math.abs(data.dir) * ((fields.dirb == "+" and 1) or -1)
+		end
+		if fields.channel then
+			data.channel = fields.channel
+		end
+		if fields.pump then
+			step(pos)
 		end
 		data.formspec = make_formspec(data)
 		set_data(pos, data, true)
-	end,
-	on_punch = function(pos, node, puncher, pointed_thing)
-		step(pos)
 	end,
 	on_destruct = function(pos)
 		local data = get_data(pos)
@@ -268,6 +310,12 @@ minetest.register_node("pump:pump", {
 		remove_pipes(pos, dir)
 		set_data(pos, {}, true)
 	end,
+	digiline = {
+		receptor = {},
+		effector = {
+			action = on_digiline_receive,
+		},
+	},
 })
 
 minetest.register_node("pump:pipe", {
