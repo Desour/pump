@@ -217,16 +217,45 @@ local function remove_pipes(pos, dir)
 	end, pos)
 end
 
+local function make_formspec(data)
+	local dir_abs = math.abs(data.dir)
+	return "size[3,2]"..
+		"checkbox[1,1;activated;activated;"..data.activated.."]"..
+		"dropdown[0,0;0.5;dira;x,y,z;"..dir_abs.."]"..
+		"dropdown[1,0;0.5;dirb;+,-;"..((data.dir/dir_abs > 0 and 1) or 2).."]"
+end
+
 minetest.register_node("pump:pump", {
 	description = "Pump",
 	tiles = {"default_steel_block.png^pump_side.png"},
 	groups = {snappy=2, choppy=2, oddly_breakable_by_hand=2},
 	sounds = default.node_sound_wood_defaults(),
 	on_construct = function(pos)
-		set_data(pos, {mode = "extend", dir = -2, pipe_length = 0}, true)
+		local data = {
+			mode = "extend",
+			dir = -2,
+			pipe_length = 0,
+			activated = "false",
+		}
+		data.formspec = make_formspec(data)
+		set_data(pos, data, true)
 	end,
-	--~ on_receive_fields = function(pos, formanme, fields, sender) -- TODO
-	--~ end,
+	on_receive_fields = function(pos, formanme, fields, sender)
+		print(dump(fields))
+		local data = get_data(pos)
+		if fields.activated then
+			data.activated = fields.activated
+		end
+		if fields.dira then
+			local xyz = vector.new(1, 2, 3)
+			data.dir = data.dir/math.abs(data.dir) * xyz[fields.dira]
+		end
+		if fields.dirb then
+			data.dir = math.abs(data.dir) * (fields.dirb == "+" and 1) or -1
+		end
+		data.formspec = make_formspec(data)
+		set_data(pos, data, true)
+	end,
 	on_punch = function(pos, node, puncher, pointed_thing)
 		step(pos)
 	end,
