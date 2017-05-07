@@ -84,7 +84,7 @@ local function get_connected(startpos, nodes, connected, VoxelManip, minp, maxp,
 			if connected[hashed_pos] == nil and pos[xyz[p]] > minp[xyz[p]] and
 					pos[xyz[p]] < maxp[xyz[p]] then
 				connected = get_connected(pos, nodes, connected,
-						VoxelManip, minp, maxp, hashed_pos)
+						VoxelManip, minp, maxp, hashed_pos, dir)
 			end
 			if xyz[p] == dir[1] then
 				break
